@@ -99,6 +99,7 @@ CONFIGURE_OPTS_64="
     --with-freetype
     --with-pgsql=$OPREFIX/pgsql-$PGSQLVER
 
+    --enable-embed=shared
     --enable-fpm
     --with-fpm-user=php
     --with-fpm-group=php

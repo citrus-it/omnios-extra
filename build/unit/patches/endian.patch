@@ -1,0 +1,11 @@
+diff -wpruN '--exclude=*.orig' a~/src/nxt_websocket_header.h a/src/nxt_websocket_header.h
+--- a~/src/nxt_websocket_header.h	1970-01-01 00:00:00
++++ a/src/nxt_websocket_header.h	1970-01-01 00:00:00
+@@ -6,6 +6,7 @@
+ #ifndef _NXT_WEBSOCKET_HEADER_H_INCLUDED_
+ #define _NXT_WEBSOCKET_HEADER_H_INCLUDED_
+ 
++#include <endian.h>
+ #include <netinet/in.h>
+ 
+ 

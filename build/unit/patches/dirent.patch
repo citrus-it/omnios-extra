@@ -1,0 +1,30 @@
+diff -wpruN '--exclude=*.orig' a~/src/nxt_cert.c a/src/nxt_cert.c
+--- a~/src/nxt_cert.c	1970-01-01 00:00:00
++++ a/src/nxt_cert.c	1970-01-01 00:00:00
+@@ -832,15 +832,24 @@ nxt_cert_store_load(nxt_task_t *task, nx
+         goto fail;
+     }
+ 
++    char _buf[MAXPATHLEN + 1];
++    size_t _len;
++
++    _len = sprintf(_buf, "%s/", rt->certs.start);
++
+     for ( ;; ) {
++	struct stat st;
++
+         de = readdir(dir);
+         if (de == NULL) {
+             break;
+         }
+ 
+-        if (de->d_type != DT_REG) {
++	strcpy(_buf + _len, de->d_name);
++	if (stat(_buf, &st) == -1)
++		continue;
++	if (!S_ISREG(st.st_mode))
+             continue;
+-        }
+ 
+         item = nxt_array_add(certs);
+         if (nxt_slow_path(item == NULL)) {

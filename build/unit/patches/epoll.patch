@@ -1,0 +1,19 @@
+diff -wpruN '--exclude=*.orig' a~/auto/events a/auto/events
+--- a~/auto/events	1970-01-01 00:00:00
++++ a/auto/events	1970-01-01 00:00:00
+@@ -16,13 +16,13 @@ nxt_feature_test="#include <sys/epoll.h>
+                   int main() {
+                       int  n;
+ 
+-                      n = epoll_create(1);
++                      n = disabled_epoll_create(1);
+                       close(n);
+                       return 0;
+                   }"
+ . auto/feature
+ 
+-if [ $nxt_found = yes ]; then
++if [ $nxt_found = disabled_yes ]; then
+     NXT_HAVE_EPOLL=YES
+ 
+     nxt_feature="Linux signalfd()"

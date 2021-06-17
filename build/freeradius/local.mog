@@ -1,0 +1,67 @@
+#
+# This file and its contents are supplied under the terms of the
+# Common Development and Distribution License ("CDDL"), version 1.0.
+# You may only use this file in accordance with the terms of version
+# 1.0 of the CDDL.
+#
+# A full copy of the text of the CDDL should have accompanied this
+# source. A copy of the CDDL is also available via the Internet at
+# http://www.illumos.org/license/CDDL.
+#
+# Copyright 2020 OmniOS Community Edition (OmniOSce) Association.
+
+license LICENSE license=GPLv2
+license files/LICENSE.talloc license=LGPLv3
+
+# Drop rc.radiusd
+<transform path=$(PREFIX)/sbin/rc.radiusd -> drop>
+
+# Move config to share/example
+# NOTE: generally you will remove/add/update files in the etc dir for freeradius
+#       we move this to share/example so it can be update on new release without
+#       breaking the users config by re-adding files. The svc script will copy 
+#       them from the share/example dir on first run.
+dir path=$(PREFIX)/share/examples owner=root group=bin mode=0755
+<transform file dir link -> edit path etc/$(OPREFIX)/$(PROG)-$(VERSION)/ \
+    $(PREFIX)/share/examples/raddb/>
+
+# Create user and gorup
+group groupname=$(GROUP)
+user ftpuser=false username=$(USER) group=$(GROUP) \
+    gcos-field="RADIUS Daemon" \
+    home-dir=/var/$(OPREFIX)/$(PROG) password=NP
+
+# Correct permissions and add homedir
+dir path=var/$(OPREFIX)/$(PROG) owner=$(USER) group=$(GROUP) mode=0750
+<transform dir path=var/log/$(PROG) -> set owner $(USER)>
+<transform dir path=var/log/$(PROG) -> set group $(GROUP)>
+<transform dir path=var/log/$(PROG) -> set mode 0755>
+<transform dir path=var/log/$(PROG)/radacct -> set owner $(USER)>
+<transform dir path=var/log/$(PROG)/radacct -> set group $(GROUP)>
+<transform dir path=var/log/$(PROG)/radacct -> set mode 0755>
+<transform dir path=etc/$(OPREFIX)/$(PROG)-$(VERSION) -> set owner $(USER)>
+<transform dir path=etc/$(OPREFIX)/$(PROG)-$(VERSION) -> set group $(GROUP)>
+<transform dir path=etc/$(OPREFIX)/$(PROG)-$(VERSION) -> set mode 0750>
+<transform dir file link path=$(PREFIX)/share/examples/raddb/ \
+    -> set owner root>
+<transform dir file link path=$(PREFIX)/share/examples/raddb/ \
+    -> set group bin>
+<transform dir path=$(PREFIX)/share/examples/raddb/ \
+    -> set mode 0755>
+<transform file link path=$(PREFIX)/share/examples/raddb/ \
+    -> set mode 0644>
+
+# Mediated binaries
+<transform file path=$(PREFIX)/(s?bin)/(.*) -> emit \
+    link path=$(OPREFIX)/%<1>/%<2> target=../$(PROG)-$(VERSION)/%<1>/%<2> \
+    mediator=$(PROG) mediator-version=$(VERSION) >
+
+# Mediated man pages
+<transform file path=$(PREFIX)/share/man/(man\d)/(.*) -> emit \
+    link path=$(OPREFIX)/share/man/%<1>/%<2> \
+    target=../../../$(PROG)-$(VERSION)/share/man/%<1>/%<2> \
+    mediator=$(PROG) mediator-version=$(VERSION) >
+
+# Restart service on upgrade
+<transform file path=$(PREFIX)/sbin/ \
+    -> set restart_fmri svc:/network/radius:$(PROG)>

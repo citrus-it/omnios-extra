@@ -28,6 +28,7 @@ depend fmri=ooce/developer/llvm-120 type=require
 depend fmri=ooce/developer/subversion type=require
 depend fmri=ooce/editor/emacs type=require
 depend fmri=ooce/fonts/liberation type=require
+depend fmri=ooce/server/freeradius type=require
 depend fmri=ooce/library/apr type=require
 depend fmri=ooce/library/apr-util type=require
 depend fmri=ooce/library/cairo type=require
@@ -58,6 +59,7 @@ depend fmri=ooce/library/pango type=require
 depend fmri=ooce/library/security/libsasl2 type=require
 depend fmri=ooce/library/serf type=require
 depend fmri=ooce/library/slang type=require
+depend fmri=ooce/library/talloc type=require
 depend fmri=ooce/library/tiff type=require
 depend fmri=ooce/library/unbound type=require
 depend fmri=ooce/multimedia/ffmpeg type=require

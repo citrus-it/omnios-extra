@@ -18,12 +18,13 @@
 
 PROG=freeradius
 PKG=ooce/server/freeradius
-TALLOCVER=2.3.2
 VER=3.0.23
+TALLOCVER=2.3.2
 MAJVER=${VER%.*}            # M.m
 sMAJVER=${MAJVER//./}       # Mm
 SUMMARY="FreeRADIUS $MAJVER"
-DESC="The open source implementation of RADIUS, an IETF protocol for AAA (Authorisation, Authentication, and Accounting)."
+DESC="The open source implementation of RADIUS, an IETF protocol for AAA "
+DESC+="(Authorisation, Authentication, and Accounting)."
 
 OPREFIX=$PREFIX
 PREFIX+=/$PROG-$MAJVER
@@ -32,103 +33,68 @@ BUILD_DEPENDS_IPS="
     ooce/library/mariadb-${MARIASQLVER//./}
 "
 
-set_arch 64
-
-## build talloc dependancy
-# NOTE: talloc only builds as 64-bit
-save_buildenv
-
-set_mirror "https://www.samba.org/ftp"
-set_checksum sha256 "27a03ef99e384d779124df755deb229cd1761f945eca6d200e8cfd9bf5297bd7"
-
-CONFIGURE_OPTS="
-    --prefix=$PREFIX
-    --disable-python
-"
-build_dependency talloc talloc-$TALLOCVER talloc talloc $TALLOCVER
-
-restore_buildenv
-
-tallocinc=$DEPROOT$PREFIX/include
-talloclib=$DEPROOT$PREFIX/lib/$ISAPART64
-
-## build freeradius
-set_builddir $PROG-server-$VER
-
-#set_mirror "ftp://ftp.freeradius.org/pub"
-set_mirror "http://ftp.ntua.gr/mirror"
-set_checksum sha256 "08ce42bf0ec217704ca163619c06efcae8a6d6a8ae7a626d77da9a6fd210e235"
-
-
-CONFIGURE_OPTS_64="
-    --prefix=$PREFIX
-    --sysconfdir=/etc$OPREFIX
-    --with-logdir=/var/log/$PROG
-    --localstatedir=/var/$OPREFIX/$PROG
-    --with-raddbdir=/etc$OPREFIX/$PROG-$MAJVER
-    --libdir=$PREFIX/lib/$ISAPART64
-    --with-openssl-include-dir=$OPREFIX/include
-    --with-openssl-lib-dir=$OPREFIX/lib/$ISAPART64
-"
-    #--with-talloc-include-dir=$PREFIX/include
-    #--with-talloc-lib-dir=$PREFIX/lib/$ISAPART64
-CFLAGS64+=" -D_XPG4_2"
-CPPFLAGS64+=" -I$tallocinc"
-LDFLAGS64+=" -L$OPREFIX/lib/$ISAPART6 -L$talloclib -R$OPREFIX/lib/$ISAPART64 -R$PREFIX/lib/$ISAPART64"
-#LDFLAGS64+=" -L${OPREFIX}/mariadb-${MARIASQLVER}/lib/${ISAPART64} -R${OPREFIX}/mariadb-${MARIASQLVER}/lib/${ISAPART64}"
-
-addpath PKG_CONFIG_PATH64 $talloclib/pkgconfig
+# talloc ships its own licence that refers out to LGPLv3
+SKIP_LICENCES=LGPLv3
 
 XFORM_ARGS="
     -DPREFIX=${PREFIX#/}
     -DOPREFIX=${OPREFIX#/}
     -DPROG=$PROG
+    -DPKGROOT=$PROG-$MAJVER
     -DVERSION=$MAJVER
     -DsVERSION=$sMAJVER
     -DDsVERSION=-$sMAJVER
-    -DUSER=radius
-    -DGROUP=radius
+    -DUSER=radius -DUID=74
+    -DGROUP=radius -DGID=74
 "
 
-save_function make_install _make_install
-make_install() {
-    _make_install "$@"
-
-    # Copy in the dependency libraries
-
-    pushd $talloclib >/dev/null
-    for lib in libtalloc*; do
-        [[ $lib = *.so.* && -f $lib && ! -h $lib ]] || continue
-        tgt=`echo $lib | cut -d. -f1-3`
-        logmsg "--- installing library $lib -> $tgt"
-        logcmd cp $lib $DESTDIR/$PREFIX/lib/$ISAPART64/$tgt \
-            || logerr "cp $tgt"
-    done
-    popd >/dev/null
-
-    pushd $DESTDIR/$PREFIX >/dev/null
-
-    # Unfortunately, libtool insists on adding $DEPROOT to the runtime
-    # library path in each binary and library. Fixing this up post-install
-    # for now, there may be a better way to do it.
-    typeset rpath="$PREFIX/lib/$ISAPART64:$OPREFIX/lib/$ISAPART64:${OPREFIX}/mariadb-${MARIASQLVER}/lib/${ISAPART64}"
-    rpath+=":/usr/gcc/$GCCVER/lib/$ISAPART64"
-
-    for f in bin/* sbin/* libexec/* lib/$ISAPART64/*; do
-        [ -f $f -a ! -h $f ] || continue
-        logmsg "--- fixing runpath in $f"
-        logcmd elfedit -e "dyn:value -s RUNPATH $rpath" $f
-        logcmd elfedit -e "dyn:value -s RPATH $rpath" $f
-    done
-}
+set_builddir $PROG-server-$VER
+set_arch 64
+set_standard XPG4v2
 
 init
-download_source $PROG "$PROG-server" $VER
 prep_build
+
+## build talloc dependency
+save_buildenv
+
+CONFIGURE_OPTS="
+    --prefix=$PREFIX
+    --disable-python
+"
+build_dependency -merge talloc talloc-$TALLOCVER $PROG talloc $TALLOCVER
+sed '/^\*/q' < $TMPDIR/talloc-$TALLOCVER/talloc.c > $TMPDIR/LICENCE.talloc
+
+restore_buildenv
+
+note -n "Building $PROG"
+
+CONFIGURE_OPTS="
+    --prefix=$PREFIX
+    --sysconfdir=/etc$PREFIX
+    --with-logdir=/var/log/$PREFIX
+    --localstatedir=/var/$OPREFIX/$PROG
+    --with-raddbdir=/etc$PREFIX
+    --libdir=$PREFIX/lib/$ISAPART64
+    --with-talloc-include-dir=$DESTDIR$PREFIX/include
+    --with-talloc-lib-dir=$DESTDIR$PREFIX/lib/$ISAPART64
+"
+
+# This prevents the build from embedding the temporary build directory into the
+# runpath of every object.
+MAKE_ARGS_WS="
+    TALLOC_LDFLAGS=\"-L$DESTDIR$PREFIX/lib/$ISAPART64 \
+        -R$PREFIX/lib/$ISAPART64\"
+"
+
+# To find OpenLDAP
+CPPFLAGS+=" -I$OPREFIX/include"
+LDFLAGS64+=" -L$OPREFIX/lib/$ISAPART64 -R$OPREFIX/lib/$ISAPART64"
+
+download_source $PROG "$PROG-server" $VER
+MAKE_INSTALL_ARGS="R=$DESTDIR" build -ctf
 xform files/freeradius-template.xml > $TMPDIR/$PROG-$sMAJVER.xml
-xform files/freeradius-template.sh > $TMPDIR/$PROG-$sMAJVER
-MAKE_INSTALL_ARGS="R=$DESTDIR"
-build -ctf
+xform files/freeradius-template > $TMPDIR/$PROG-$sMAJVER
 install_smf ooce $PROG-$sMAJVER.xml $PROG-$sMAJVER
 make_package
 clean_up

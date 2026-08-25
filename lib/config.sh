@@ -220,7 +220,7 @@ GNUBIN=/usr/gnu/bin
 for util in \
     basename cat comm cut diff dis tput digest mktemp sort sed tee rm mv cp \
     mkdir rmdir readlink ln ls chmod touch grep time find fgrep egrep uniq \
-    stat strip sleep tail date
+    stat strip sleep tail date nm
 do
     declare -n _var=${util^^}
     declare -g _var=$USRBIN/$util
@@ -476,10 +476,13 @@ typeset -A CXXFLAGS=(
     [amd64]=-m64
 )
 
+typeset -A CPPFLAGS=(
+    [0]=-D_REENTRANT
+)
+
 typeset -A PYBUILDOPTS=()
 typeset -A PYINSTOPTS=()
 
-typeset -A CPPFLAGS=()
 typeset -A PKG_CONFIG_PATH=(
     [i386]=$PREFIX/lib/pkgconfig
     [amd64]=$PREFIX/lib/amd64/pkgconfig

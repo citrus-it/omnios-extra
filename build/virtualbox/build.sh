@@ -185,7 +185,7 @@ EOF
     logmsg "--- building VirtualBox"
     . ./env.sh
     logmsg "    BUILD TYPE: $BUILD_TYPE"
-    logcmd kmk || logerr "failed build VirtualBox"
+    logcmd kmk -j$MJOBS || logerr "failed build VirtualBox"
 }
 
 make_install() {

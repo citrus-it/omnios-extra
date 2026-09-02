@@ -32,6 +32,15 @@ ROOTDIR=${BLIBDIR%/*}
 
 . $BLIBDIR/config.sh
 [ -f $BLIBDIR/site.sh ] && . $BLIBDIR/site.sh
+
+# Values derived from MJOBS are set here, after site.sh, so that overriding
+# MJOBS there is sufficient. Each can also be set individually in site.sh.
+MAKE_JOBS=${MAKE_JOBS:--j $MJOBS}
+# Toolchains that size their own parallelism from the CPU count and do not
+# honour MAKE_JOBS.
+export CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-$MJOBS}
+export GOMAXPROCS=${GOMAXPROCS:-$MJOBS}
+
 $MKDIR -p $TMPDIR
 BASE_TMPDIR=$TMPDIR
 
@@ -1845,6 +1854,8 @@ generate_manifest() {
         [ -z "$SKIP_RTIME_CHECK" ] && check_rtime
         [ -z "$SKIP_SSP_CHECK" ] && check_ssp
         check_soname
+        # One day this can be promoted to also run in batch builds
+        check_errno
     fi
     check_bmi
     logmsg "--- Generating package manifest from $DESTDIR"
@@ -2703,7 +2714,15 @@ make_isaexec_stub_arch() {
         logcmd $CC ${CFLAGS[0]} ${CFLAGS[i386]} -o $file \
             -DFALLBACK_PATH="$dir/$file" $BLIBDIR/isastub.c \
             || logerr "--- Failed to make isaexec stub for $dir/$file"
-        strip_files "$file"
+        # When CTF conversion is enabled, the stub contains DWARF via the
+        # debug flags in CFLAGS. Convert it here since the main conversion
+        # pass may already have run; conversion strips the file afterwards.
+        if [ "${CTF_ENABLED:-0}" -eq 1 ]; then
+            typeset ctftag='---- CTF:'
+            do_convert_ctf "$file"
+        else
+            strip_files "$file"
+        fi
     done
 }
 
@@ -2889,6 +2908,10 @@ build() {
     done
 
     [ $ctf -eq 1 ] && CFLAGS[0]+=" $CTF_CFLAGS"
+    # Record whether this build is being converted to CTF so that objects
+    # created outside of the main build, such as isaexec stubs, can be
+    # handled properly.
+    CTF_ENABLED=$ctf
 
     hook build_init
 
@@ -3801,7 +3824,8 @@ check_soname() {
             EXEC)
                 if $ELFEDIT -re 'dyn:tag needed' "$DESTDIR/$obj" \
                     | $EGREP 'NEEDED.*\.so$'; then
-                    if [ -z "$if" ] || ! $EGREP -s "^${obj#/}\$" $if; then
+                    if [ -z "$if" ] || ! $FGREP -sx "${obj#/}" $if >/dev/null
+                    then
                         echo "$obj has an unqualified dependency" \
                             >> $TMPDIR/rtime.soname
                     fi
@@ -3809,7 +3833,8 @@ check_soname() {
             DYN)
                 if ! $ELFEDIT -re 'dyn:tag soname' "$DESTDIR/$obj" \
                     >/dev/null 2>&1; then
-                    if [ -z "$if" ] || ! $EGREP -s "^${obj#/}\$" $if; then
+                    if [ -z "$if" ] || ! $FGREP -sx "${obj#/}" $if >/dev/null
+                    then
                         echo "$obj is missing an SONAME" \
                             >> $TMPDIR/rtime.soname
                     fi
@@ -3846,6 +3871,40 @@ check_bmi() {
     if [ -s "$TMPDIR/rtime.bmi" ]; then
         $CAT $TMPDIR/rtime.bmi | pipelog
         logerr "BMI instruction set found"
+    fi
+}
+
+check_errno() {
+    [ -n "$GLOBAL_ERRNO_EXPECTED" ] && return
+
+    # The illumos errno macro only expands to the per-thread ___errno()
+    # when compiled with -D_REENTRANT or -D_TS_ERRNO, and h_errno only
+    # expands to __h_errno() (libresolv) when H_ERRNO_IS_FUNCTION is
+    # additionally defined. An object which imports the global symbols
+    # instead reads stale values on any thread other than the primordial
+    # one.
+
+    logmsg "-- Checking errno binding"
+
+    typeset if=$SRCDIR/files/errno.ignore
+    [ -f "$if" ] || if=
+
+    : > $TMPDIR/rtime.errno
+    while read obj; do
+        [ -f "$DESTDIR/$obj" ] || continue
+        if $NM -D "$DESTDIR/$obj" 2>/dev/null | $EGREP '\|UNDEF' \
+            | $EGREP -s '\|(h_)?errno$' >/dev/null; then
+            if [ -z "$if" ] || ! $FGREP -sx "${obj#/}" $if >/dev/null; then
+                echo "$obj imports a global errno symbol" \
+                    >> $TMPDIR/rtime.errno
+            fi
+        fi &
+        parallelise $LCPUS
+    done < <(rtime_objects)
+    wait
+    if [ -s "$TMPDIR/rtime.errno" ]; then
+        $CAT $TMPDIR/rtime.errno | pipelog
+        logerr "Found objects importing the global errno symbol"
     fi
 }
 

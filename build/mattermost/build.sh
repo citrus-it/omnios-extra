@@ -17,7 +17,7 @@
 . ../../lib/build.sh
 
 PROG=mattermost
-VER=10.11.23
+VER=11.7.10
 # check for the current morph version/commit hash and create a patched branch in
 # https://github.com/omniosorg/morph; then point to that branch
 MORPHBRANCH=il_1.1.0
@@ -40,6 +40,12 @@ PREFIX+="/$PROG"
 export BUILD_NUMBER=$VER
 export PATH="$GNUBIN:$PATH"
 subsume_arch $BUILDARCH PKG_CONFIG_PATH
+
+# The webapp build optimises images using 'sharp', for which no illumos
+# binaries exist. Ask npm to install its WebAssembly build instead, which is
+# only selected when the target CPU is 'wasm32'. No other optional,
+# platform-specific package matches illumos so nothing else is affected.
+export npm_config_cpu=wasm32
 
 XFORM_ARGS="
     -DPREFIX=${PREFIX#/}
@@ -131,7 +137,15 @@ build() {
     # we could build the webapp from within the server project
     # using the build-client target
     # however, node.js fails in a very weird way (missing dependencies)
+    #
+    # node's V8 places its many mmap()ed regions at random addresses which,
+    # on illumos, can end up in the path of the brk() heap used by libumem's
+    # default backend, causing spurious out-of-memory aborts in the memory
+    # hungry webpack build. Switch libumem to its mmap backend for the
+    # duration.
+    export UMEM_OPTIONS=backend=mmap
     build_component webapp dist
+    unset UMEM_OPTIONS
     restore_variable LDFLAGS
 
     build_component server setup-go-work build-illumos package-prep

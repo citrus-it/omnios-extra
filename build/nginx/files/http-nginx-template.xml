@@ -62,6 +62,14 @@ CDDL HEADER END
                 <service_fmri value="svc:/milestone/multi-user" />
             </dependent>
 
+            <!-- #if RELVER >= 151061 -->
+            <managed_paths>
+                <directory path="$(TMP_PATH)"
+                           mode="0700"
+                           empty="true" />
+            </managed_paths>
+
+            <!-- #endif -->
             <exec_method type="method"
                          name="start"
                          exec="%{config/method} %m"

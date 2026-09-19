@@ -2360,14 +2360,74 @@ build_xform_sed() {
     done
 }
 
+# Templates processed by xform() can contain simple conditional blocks which
+# are included or omitted depending on the target release:
+#
+#     #if RELVER >= 151061
+#         ... lines included when building for r151061 or later ...
+#     #else
+#         ... lines included otherwise ...
+#     #endif
+#
+# The markers must be the first thing on a line other than whitespace and
+# an optional comment leader, so that they can be embedded in any type of
+# file. Nesting is not supported. Anything following the version, such as a
+# comment trailer, is ignored, for example the following syntax is appropriate
+# for SMF manifests.
+#
+#     <!-- #if RELVER < 151061 -->
+xform_cond() {
+    $NAWK -v relver="$RELVER" '
+        function fail(msg) {
+            printf("xform: line %d: %s\n", NR, msg) > "/dev/stderr"
+            failed = 1
+            exit 1
+        }
+        function cond(var, op, ver) {
+            if (var != "RELVER") fail("unknown variable: " var)
+            if (ver !~ /^[0-9]+$/) fail("bad version: " ver)
+            ver += 0
+            if (op == ">")  return relver > ver
+            if (op == ">=") return relver >= ver
+            if (op == "<")  return relver < ver
+            if (op == "<=") return relver <= ver
+            if (op == "=" || op == "==") return relver == ver
+            fail("bad operator: " op)
+        }
+        BEGIN { relver += 0 }
+        /^[^A-Za-z0-9]*#if[ \t]/ {
+            if (inblock) fail("nested #if")
+            sub(/^.*#if[ \t]+/, "")
+            n = split($0, a, /[ \t]+/)
+            if (n < 3) fail("malformed #if")
+            keep = cond(a[1], a[2], a[3])
+            inblock = 1
+            next
+        }
+        /^[^A-Za-z0-9]*#else([ \t]|$)/ {
+            if (!inblock) fail("#else without #if")
+            keep = !keep
+            next
+        }
+        /^[^A-Za-z0-9]*#endif([ \t]|$)/ {
+            if (!inblock) fail("#endif without #if")
+            inblock = 0
+            next
+        }
+        !inblock || keep
+        END { if (!failed && inblock) fail("unterminated #if") }
+    '
+}
+
 # Transform a file using the translations defined in $SYS_XFORM_ARGS and
-# $XFORM_ARGS
+# $XFORM_ARGS, after processing any conditional blocks.
 xform() {
     local file="$1"
 
     [ -n "$XFORM_SED_CMD" ] || build_xform_sed
 
-    $SED "$XFORM_SED_CMD" < $file
+    xform_cond < $file | $SED "$XFORM_SED_CMD"
+    [ ${PIPESTATUS[0]} -eq 0 ] || logerr "--- xform: error processing $file"
 }
 
 #############################################################################

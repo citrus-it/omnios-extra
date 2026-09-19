@@ -40,10 +40,13 @@ CONFPATH=/etc$PREFIX
 LOGPATH=/var/log$PREFIX
 VARPATH=/var$PREFIX
 RUNPATH=$VARPATH/run
+NGINX_TMP_PATH=/var/run/$PROG
 export NGX_ACME_STATE_PREFIX=$VARPATH/acmecache
 
 BUILD_DEPENDS_IPS="library/security/openssl library/pcre2"
 RUN_DEPENDS_IPS="ooce/server/nginx-common"
+
+test_relver '<' 151061 && NGINX_TMP_PATH=/tmp/.nginx
 
 XFORM_ARGS="
     -DPREFIX=${PREFIX#/}
@@ -56,6 +59,7 @@ XFORM_ARGS="
     -DDsVERSION=
     -DBROTLI=$BROTLIVER
     -DACME=$ACMEVER
+    -DTMP_PATH=$NGINX_TMP_PATH
 "
 
 CONFIGURE_OPTS[amd64]=
@@ -86,11 +90,11 @@ CONFIGURE_OPTS="
     --pid-path=$RUNPATH/$PROG.pid
     --http-log-path=$LOGPATH/access.log
     --error-log-path=$LOGPATH/error.log
-    --http-client-body-temp-path=/tmp/.nginx/body
-    --http-proxy-temp-path=/tmp/.nginx/proxy
-    --http-fastcgi-temp-path=/tmp/.nginx/fastcgi
-    --http-uwsgi-temp-path=/tmp/.nginx/uwsgi
-    --http-scgi-temp-path=/tmp/.nginx/scgi
+    --http-client-body-temp-path=$NGINX_TMP_PATH/body
+    --http-proxy-temp-path=$NGINX_TMP_PATH/proxy
+    --http-fastcgi-temp-path=$NGINX_TMP_PATH/fastcgi
+    --http-uwsgi-temp-path=$NGINX_TMP_PATH/uwsgi
+    --http-scgi-temp-path=$NGINX_TMP_PATH/scgi
     --add-dynamic-module=../ngx_brotli-$BROTLIVER
     --add-dynamic-module=../nginx-acme-$ACMEVER
 "

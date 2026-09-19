@@ -42,12 +42,21 @@ typeset -r NGINX=`svcprop -c -p config/exec $SMF_FMRI`
 case "$1" in
 start)
         /bin/rm -f ${PIDFILE}
-	# Once illumos supports SMF runtime directory creation (IPD 17)
-	# we can drop this entire method and create a temporary directory
-	# under /var/run from the manifest.
-        [ -d /tmp/.nginx ] || mkdir /tmp/.nginx
-        chmod 700 /tmp/.nginx
-        exec ${NGINX} -c ${CONF_FILE} 2>&1
+#if RELVER < 151061
+	# Releases older than r151061 don't support SMF managed paths so we
+	# need to create the temporary directory here. It's shared by every
+	# installed version of nginx (which could include ones from earlier
+	# releases which have been dropped), and they may be starting together.
+	# We therefore can't empty the directory.
+	typeset -r TMPPATH=$(TMP_PATH)
+	/bin/mkdir -m 0700 $TMPPATH 2>/dev/null
+	if [ -h $TMPPATH -o ! -d $TMPPATH -o ! -O $TMPPATH ]; then
+		echo "$TMPPATH is not a directory owned by `id -un`"
+		exit $SMF_EXIT_ERR_FATAL
+	fi
+	/bin/chmod 0700 $TMPPATH
+#endif
+	exec ${NGINX} -c ${CONF_FILE} 2>&1
         ;;
 *)
         echo "Unknown method."

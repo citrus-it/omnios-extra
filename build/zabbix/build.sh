@@ -18,6 +18,7 @@
 
 PROG=zabbix
 VER=7.4.16
+LIBEVENTVER=2.1.12
 PKG=ooce/application/zabbix
 SUMMARY="enterprise-class open source distributed monitoring solution"
 DESC="Zabbix is software that monitors numerous parameters of a network "
@@ -63,15 +64,41 @@ CONFIGURE_OPTS[amd64]+="
     --libdir=$PREFIX/lib/
 "
 
-test_relver '>=' 151059 && USE_LIBEVENT=1 || USE_LIBEVENT=0
+LDFLAGS+=" -R$OPREFIX/${LIBDIRS[amd64]}"
+LIBS+=" -lumem"
 
-((USE_LIBEVENT)) && LEPREFIX=/usr || LEPREFIX=$OPREFIX
+init
+prep_build
+
+#########################################################################
+# Zabbix requires libevent 2, which is part of the base system from
+# r151059. Build a static copy for older releases.
+
+if test_relver '<' 151059; then
+    save_buildenv
+
+    reset_configure_opts
+    CONFIGURE_OPTS="
+        --disable-shared
+        --disable-openssl
+        --disable-samples
+        ac_cv_lib_xnet_socket=no
+    "
+
+    build_dependency libevent libevent-$LIBEVENTVER-stable \
+        libevent libevent $LIBEVENTVER-stable
+
+    restore_buildenv
+
+    LEPREFIX=$DEPROOT$PREFIX
+else
+    LEPREFIX=/usr
+fi
 
 CONFIGURE_OPTS+=" --with-libevent=$LEPREFIX"
 CONFIGURE_OPTS[amd64]+=" --with-libevent-lib=$LEPREFIX/${LIBDIRS[amd64]}"
 
-LDFLAGS+=" -R$OPREFIX/lib/amd64 "
-LIBS+=" -lumem"
+#########################################################################
 
 post_install() {
     logcmd rsync -a ui/ $DESTDIR/$PREFIX/ui/ \
@@ -90,10 +117,7 @@ post_install() {
         || logerr "rsync scripts failed"
 }
 
-init
-prep_build
 download_source $PROG $PROG $VER
-#((USE_LIBEVENT)) || apply_patches $PATCHDIR series.libev
 patch_source
 run_autoreconf -fi
 

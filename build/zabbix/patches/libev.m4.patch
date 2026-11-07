@@ -16,16 +16,3 @@ index b3b1588..3d889da 100644
  			_libevent_dir_set="yes"
  		]
  	)
-diff --git a/src/libs/zbxipcservice/ipcservice.c b/src/libs/zbxipcservice/ipcservice.c
-index 7323e85..a3688ab 100644
---- a/src/libs/zbxipcservice/ipcservice.c
-+++ b/src/libs/zbxipcservice/ipcservice.c
-@@ -1024,7 +1024,7 @@ static void ipc_service_event_log_cb(int severity, const char *msg)
-  ******************************************************************************/
- static void	ipc_service_init_libevent(void)
- {
--	event_set_log_callback(ipc_service_event_log_cb);
-+	/* event_set_log_callback(ipc_service_event_log_cb); */
- }
- 
- /******************************************************************************
